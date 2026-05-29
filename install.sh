@@ -155,8 +155,9 @@ fi
 # ── 2. Configuration ─────────────────────────────────────────────
 echo -e "\n${BOLD}[2/6] Configuration${NC}"
 
-ask "Data directory for models, datasets, outputs [/opt/f5tts-data]: " DATA_DIR
-DATA_DIR="${DATA_DIR:-/opt/f5tts-data}"
+DEFAULT_DATA="$HOME/f5tts-data"
+ask "Data directory for models, datasets, outputs [$DEFAULT_DATA]: " DATA_DIR
+DATA_DIR="${DATA_DIR:-$DEFAULT_DATA}"
 
 DETECTED_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")
 ask "Host IP or hostname [$DETECTED_IP]: " HOST_IP
@@ -265,8 +266,13 @@ else
   warn "Skipped — set MODEL_PATH in .env when you have a model"
 fi
 
-# Create data directories
-mkdir -p "$DATA_DIR"/{models,datasets,outputs,refs,runs,checkpoints}
+# Create data directories (use sudo if path is outside home)
+if [[ "$DATA_DIR" != "$HOME"* ]]; then
+  sudo mkdir -p "$DATA_DIR"/{models,datasets,outputs,refs,runs,checkpoints}
+  sudo chown -R "$USER:$USER" "$DATA_DIR"
+else
+  mkdir -p "$DATA_DIR"/{models,datasets,outputs,refs,runs,checkpoints}
+fi
 ok "Data directories created at $DATA_DIR"
 
 # ── Generate .env ────────────────────────────────────────────────
@@ -299,7 +305,7 @@ if command -v htpasswd &>/dev/null; then
 elif command -v openssl &>/dev/null; then
   echo "$ADMIN_USER:$(openssl passwd -apr1 "$ADMIN_PASS")" > "$DIR/.htpasswd"
 else
-  apt-get install -y apache2-utils -qq && htpasswd -bc "$DIR/.htpasswd" "$ADMIN_USER" "$ADMIN_PASS"
+  sudo apt-get install -y apache2-utils -qq && htpasswd -bc "$DIR/.htpasswd" "$ADMIN_USER" "$ADMIN_PASS"
 fi
 ok ".htpasswd generated"
 
