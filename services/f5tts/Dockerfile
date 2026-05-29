@@ -22,7 +22,7 @@ RUN pip3 install --no-cache-dir \
 RUN git clone https://github.com/SWivid/F5-TTS.git /opt/f5-tts
 
 # Install F5-TTS deps — then force-restore torch/torchaudio versions
-RUN cd /opt/f5-tts && pip3 install --no-cache-dir -e ".[train]"
+RUN cd /opt/f5-tts && pip3 install --no-cache-dir ".[train]"
 
 # Restore pinned versions in case F5-TTS deps overwrote them
 RUN pip3 install --no-cache-dir --force-reinstall \
