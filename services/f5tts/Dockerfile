@@ -23,8 +23,8 @@ RUN git clone https://github.com/SWivid/F5-TTS.git /opt/f5-tts && \
     cd /opt/f5-tts && \
     pip3 install ".[train]" -c /tmp/constraints.txt
 
-# API service deps
-RUN pip3 install fastapi "uvicorn[standard]" huggingface_hub
+# API service deps + tensorboard (not always pulled by F5-TTS [train])
+RUN pip3 install fastapi "uvicorn[standard]" huggingface_hub tensorboard
 
 COPY api/main.py /opt/f5tts-api/main.py
 
