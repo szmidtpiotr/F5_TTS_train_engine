@@ -1,5 +1,3 @@
-version: '3.8'
-
 x-f5tts: &f5tts
   build:
     context: ./services
@@ -81,7 +79,7 @@ services:
   tensorboard:
     <<: *f5tts
     container_name: f5tts-tensorboard
-    command: tensorboard --logdir /data/runs --host 0.0.0.0 --port 6006 --path_prefix /tensorboard
+    command: python -m tensorboard.main --logdir /data/runs --host 0.0.0.0 --port 6006 --path_prefix /tensorboard
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:6006/tensorboard/"]
       interval: 30s
