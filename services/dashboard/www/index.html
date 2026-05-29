@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>F5-TTS Engine</title>
+<style>
+:root {
+  --bg:#0f1117; --panel:#181b23; --edge:#252932; --txt:#e7e9ee;
+  --mut:#6b7385; --acc:#f5a623; --ok:#3ecf8e; --err:#ff6b6b;
+  --warn:#f5a623; --blue:#4a9eff; --sidebar:220px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--txt);display:flex;height:100vh;overflow:hidden}
+
+/* Sidebar */
+#sidebar{width:var(--sidebar);background:var(--panel);border-right:1px solid var(--edge);display:flex;flex-direction:column;flex-shrink:0}
+#sidebar-logo{padding:18px 16px 14px;border-bottom:1px solid var(--edge)}
+#sidebar-logo h1{font-size:15px;font-weight:700;color:var(--acc)}
+#sidebar-logo small{color:var(--mut);font-size:11px}
+nav{flex:1;padding:10px 0;overflow-y:auto}
+nav a{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--mut);text-decoration:none;font-size:13px;border-left:3px solid transparent;transition:.15s}
+nav a:hover{color:var(--txt);background:#1e2230}
+nav a.active{color:var(--acc);border-left-color:var(--acc);background:#1e2230}
+nav a .icon{font-size:16px;width:20px;text-align:center}
+nav .sep{height:1px;background:var(--edge);margin:8px 16px}
+#sidebar-foot{padding:12px 16px;border-top:1px solid var(--edge);font-size:11px;color:var(--mut)}
+
+/* Main */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#topbar{padding:10px 20px;border-bottom:1px solid var(--edge);display:flex;align-items:center;gap:8px;background:var(--panel);flex-shrink:0}
+#topbar h2{font-size:14px;font-weight:600;flex:1}
+#topbar .pill{font-size:11px;padding:3px 10px;border-radius:20px;background:#1a3a1a;color:var(--ok)}
+#topbar .pill.warn{background:#3a2a10;color:var(--warn)}
+#topbar .pill.err{background:#3a1010;color:var(--err)}
+
+#content{flex:1;overflow:auto;padding:20px}
+iframe.service-frame{width:100%;height:100%;border:0}
+
+/* Cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:20px}
+.card{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:14px 16px}
+.card-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.card-head .icon{font-size:20px}
+.card-head .name{font-weight:600;font-size:13px}
+.card-head .status{margin-left:auto;font-size:11px;padding:2px 8px;border-radius:20px}
+.status-running{background:#1a3a1a;color:var(--ok)}
+.status-starting{background:#3a2a10;color:var(--warn)}
+.status-not_found,.status-error,.status-exited{background:#3a1010;color:var(--err)}
+.card-btns{display:flex;gap:6px;margin-top:10px}
+.btn{padding:5px 12px;border-radius:6px;border:1px solid var(--edge);background:#1e2230;color:var(--txt);font-size:12px;cursor:pointer;transition:.15s}
+.btn:hover{background:#252932;border-color:var(--acc);color:var(--acc)}
+.btn.danger:hover{border-color:var(--err);color:var(--err)}
+
+/* System info */
+.sys-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:20px}
+.sys-card{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:12px 14px}
+.sys-card h4{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.sys-card .val{font-size:18px;font-weight:700;color:var(--txt)}
+.sys-card .sub{font-size:11px;color:var(--mut);margin-top:2px}
+.bar-bg{height:4px;background:var(--edge);border-radius:2px;margin-top:8px;overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;background:var(--ok);transition:width .4s}
+.bar-fill.warn{background:var(--warn)}
+.bar-fill.err{background:var(--err)}
+
+/* Quick test */
+.quick-test{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:16px;margin-bottom:20px}
+.quick-test h3{font-size:13px;font-weight:600;margin-bottom:10px}
+.quick-test textarea{width:100%;background:#0d0f13;color:var(--txt);border:1px solid var(--edge);border-radius:8px;padding:9px;font:inherit;resize:vertical;min-height:70px}
+.quick-test .row{display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap}
+.btn-primary{background:var(--acc);color:#000;border:0;padding:7px 16px;border-radius:6px;font:inherit;font-weight:700;cursor:pointer}
+.btn-primary:disabled{opacity:.4}
+audio{margin-top:8px;width:100%;border-radius:6px}
+.status-line{font-size:12px;color:var(--mut);margin-top:6px;min-height:16px}
+
+/* Logs modal */
+#log-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
+#log-modal.open{display:flex}
+#log-box{background:var(--panel);border:1px solid var(--edge);border-radius:12px;width:700px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column}
+#log-box header{padding:14px 16px;border-bottom:1px solid var(--edge);display:flex;align-items:center;gap:8px}
+#log-box header span{flex:1;font-weight:600}
+#log-box .close{background:none;border:none;color:var(--mut);font-size:18px;cursor:pointer}
+#log-box pre{flex:1;overflow:auto;padding:12px;font:12px/1.6 "Cascadia Code","Fira Code",monospace;color:#8a9ab8;margin:0}
+
+/* Section title */
+.sec-title{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+
+/* API Docs */
+.api-docs{max-width:720px}
+.endpoint{background:var(--panel);border:1px solid var(--edge);border-radius:8px;margin-bottom:12px;overflow:hidden}
+.endpoint-head{padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.method{font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:#1a3a1a;color:var(--ok)}
+.endpoint-path{font-family:monospace;font-size:13px}
+.endpoint-body{padding:12px 14px;border-top:1px solid var(--edge);font-size:13px;color:var(--mut);display:none}
+.endpoint-body.open{display:block}
+.endpoint-body table{width:100%;border-collapse:collapse;margin-top:8px}
+.endpoint-body td{padding:5px 8px;border:1px solid var(--edge);font-size:12px;vertical-align:top}
+.endpoint-body td:first-child{font-family:monospace;color:var(--acc);white-space:nowrap}
+.endpoint-body td:nth-child(2){color:var(--blue)}
+code{background:#0d0f13;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:12px}
+
+/* iframe wrapper */
+#iframe-wrapper{display:none;position:absolute;inset:0;top:49px}
+#iframe-wrapper iframe{width:100%;height:100%;border:0}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <div id="sidebar-logo">
+    <h1>🎙️ F5-TTS Engine</h1>
+    <small>Voice AI Platform</small>
+  </div>
+  <nav>
+    <a href="#" class="active" data-page="overview"><span class="icon">🏠</span>Overview</a>
+    <a href="#" data-page="infer"><span class="icon">🎙️</span>Inference</a>
+    <a href="#" data-page="train"><span class="icon">🎓</span>Fine-tune</a>
+    <a href="#" data-page="tensorboard"><span class="icon">📊</span>TensorBoard</a>
+    <a href="#" data-page="console"><span class="icon">🔌</span>API Console</a>
+    <div class="sep"></div>
+    <a href="#" data-page="apidocs"><span class="icon">📋</span>API Docs</a>
+    <a href="#" data-page="guide"><span class="icon">📖</span>Training Guide</a>
+  </nav>
+  <div id="sidebar-foot">F5-TTS Engine v1.0</div>
+</div>
+
+<!-- MAIN -->
+<div id="main" style="position:relative">
+  <div id="topbar">
+    <h2 id="page-title">Overview</h2>
+    <span id="global-status" class="pill">checking…</span>
+  </div>
+
+  <!-- iframe wrapper for service pages -->
+  <div id="iframe-wrapper">
+    <iframe id="service-frame" src="" allow="microphone"></iframe>
+  </div>
+
+  <!-- scrollable content area -->
+  <div id="content">
+
+    <!-- OVERVIEW -->
+    <div id="page-overview">
+      <div class="sec-title">Services</div>
+      <div class="cards" id="service-cards"></div>
+
+      <div class="sec-title">System</div>
+      <div class="sys-row" id="sys-row">
+        <div class="sys-card"><h4>GPU</h4><div class="val" id="gpu-val">—</div><div class="sub" id="gpu-sub"></div><div class="bar-bg"><div class="bar-fill" id="gpu-bar" style="width:0%"></div></div></div>
+        <div class="sys-card"><h4>RAM</h4><div class="val" id="ram-val">—</div><div class="sub" id="ram-sub"></div><div class="bar-bg"><div class="bar-fill" id="ram-bar" style="width:0%"></div></div></div>
+        <div class="sys-card"><h4>Disk /data</h4><div class="val" id="disk-val">—</div><div class="sub" id="disk-sub"></div><div class="bar-bg"><div class="bar-fill" id="disk-bar" style="width:0%"></div></div></div>
+      </div>
+
+      <div class="sec-title">Quick Test</div>
+      <div class="quick-test">
+        <h3>Generate Speech</h3>
+        <textarea id="qt-text" placeholder="Type text to synthesize…">Hello, this is a test of the F5-TTS voice engine.</textarea>
+        <div class="row">
+          <button class="btn-primary" id="qt-btn">▶ Generate</button>
+          <span style="font-size:12px;color:var(--mut)">via /api/voice/tts</span>
+        </div>
+        <div class="status-line" id="qt-status"></div>
+        <audio id="qt-player" controls style="display:none"></audio>
+      </div>
+    </div>
+
+    <!-- API DOCS -->
+    <div id="page-apidocs" style="display:none">
+      <div class="api-docs">
+        <div class="sec-title">F5-TTS REST API</div>
+        <p style="color:var(--mut);margin-bottom:16px;font-size:13px">Base URL: <code>/api</code> (port 80) or <code>http://HOST:8301</code> (direct)<br>All endpoints are unauthenticated on direct port access.</p>
+
+        <div class="endpoint">
+          <div class="endpoint-head" onclick="toggleEndpoint(this)">
+            <span class="method">GET</span><span class="endpoint-path">/voice/tts</span>
+            <span style="margin-left:auto;font-size:12px;color:var(--mut)">Generate speech → WAV</span>
+          </div>
+          <div class="endpoint-body open">
+            <p>Returns <code>audio/wav</code> — 16-bit PCM mono, 24 000 Hz.</p>
+            <table>
+              <tr><td>text</td><td>string</td><td><strong>Required.</strong> Text to synthesize.</td></tr>
+              <tr><td>speed</td><td>float</td><td>Speech rate. Default <code>1.0</code>. Range 0.5–2.0.</td></tr>
+              <tr><td>nfe_step</td><td>int 4–64</td><td>Diffusion steps. Default <code>32</code>. Higher = better quality, slower.</td></tr>
+              <tr><td>cfg_strength</td><td>float 0–5</td><td>Voice fidelity. Default <code>2.0</code>. Recommended 1.5–2.5.</td></tr>
+              <tr><td>cross_fade_duration</td><td>float 0–1</td><td>Segment smoothing. Default <code>0.15</code>.</td></tr>
+              <tr><td>sway_sampling_coef</td><td>float</td><td>Experimental sampler. Default <code>-1</code> (off).</td></tr>
+              <tr><td>seed</td><td>int</td><td>Reproducibility seed. Default <code>-1</code> (random).</td></tr>
+            </table>
+            <p style="margin-top:10px"><strong>curl:</strong></p>
+            <code>curl "http://HOST:8301/voice/tts?text=Hello+world" -o out.wav</code>
+            <p style="margin-top:8px"><strong>Python:</strong></p>
+            <code>resp = requests.get("http://HOST:8301/voice/tts", params={"text":"Hello"})<br>open("out.wav","wb").write(resp.content)</code>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-head" onclick="toggleEndpoint(this)">
+            <span class="method">GET</span><span class="endpoint-path">/voice/healthz</span>
+            <span style="margin-left:auto;font-size:12px;color:var(--mut)">Health check</span>
+          </div>
+          <div class="endpoint-body">
+            <code>{"status":"ok","tts_voice":"voice","tts_loaded":true,"device":"cuda"}</code>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-head" onclick="toggleEndpoint(this)">
+            <span class="method">GET</span><span class="endpoint-path">/voice/voices</span>
+            <span style="margin-left:auto;font-size:12px;color:var(--mut)">List available voices</span>
+          </div>
+          <div class="endpoint-body">
+            <code>{"voices":["voice"]}</code>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-head" onclick="toggleEndpoint(this)">
+            <span class="method">GET</span><span class="endpoint-path">/voice/logs</span>
+            <span style="margin-left:auto;font-size:12px;color:var(--mut)">Service log lines</span>
+          </div>
+          <div class="endpoint-body">
+            <code>{"logs":["[15:30:00] Model loaded in 12.3s", ...]}</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TRAINING GUIDE -->
+    <div id="page-guide" style="display:none;max-width:720px">
+      <div class="sec-title">Training Guide — step by step</div>
+      <div style="color:var(--mut);line-height:1.9;font-size:13px">
+        <h3 style="color:var(--txt);margin:0 0 8px">Step 1 — Record your voice</h3>
+        <p>Record 5–20 minutes of clean speech. Read naturally, with clear pauses at commas and periods. Use a quiet room. Save as WAV (mono, 22050 or 44100 Hz).</p>
+
+        <h3 style="color:var(--txt);margin:16px 0 8px">Step 2 — Upload to Fine-tune UI</h3>
+        <p>Open <a href="#" onclick="navigate('train');return false" style="color:var(--acc)">Fine-tune</a>. Go to <strong>Prepare</strong> tab. Upload your audio file. The system will auto-transcribe with Whisper and split into segments.</p>
+
+        <h3 style="color:var(--txt);margin:16px 0 8px">Step 3 — Configure training</h3>
+        <p>Go to <strong>Train</strong> tab. Set:<br>
+        • <strong>Dataset name</strong> — your project name<br>
+        • <strong>Epochs</strong> — 100–130 for a good result<br>
+        • <strong>Batch size</strong> — 800 (GPU), 200 (CPU)<br>
+        • Leave other settings at default</p>
+
+        <h3 style="color:var(--txt);margin:16px 0 8px">Step 4 — Monitor training</h3>
+        <p>Open <a href="#" onclick="navigate('tensorboard');return false" style="color:var(--acc)">TensorBoard</a> to watch the loss curve. Training is complete when loss stabilizes (typically below 0.5).</p>
+
+        <h3 style="color:var(--txt);margin:16px 0 8px">Step 5 — Test checkpoints</h3>
+        <p>Open <a href="#" onclick="navigate('infer');return false" style="color:var(--acc)">Inference</a>. Load your checkpoint from <code>/data/checkpoints/your_name/</code>. Test different checkpoints (the best is often 70–90% through training).</p>
+
+        <h3 style="color:var(--txt);margin:16px 0 8px">Step 6 — Deploy</h3>
+        <p>Edit <code>.env</code> and set <code>MODEL_PATH</code> to your best checkpoint, <code>REF_AUDIO</code> to a clean 15-second sample, <code>REF_TEXT</code> to its transcript. Then run <code>./start.sh</code>.</p>
+
+        <h3 style="color:var(--txt);margin:16px 0 8px">Tips for better pauses at commas</h3>
+        <p>When reading your training script, pause clearly at every comma. In generated text, use <code> —</code> (em-dash) or <code> ....</code> (four dots with space) for longer pauses than a regular comma produces.</p>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- LOGS MODAL -->
+<div id="log-modal">
+  <div id="log-box">
+    <header>
+      <span id="log-title">Logs</span>
+      <button class="close" onclick="closeLog()">✕</button>
+    </header>
+    <pre id="log-pre">Loading…</pre>
+  </div>
+</div>
+
+<script>
+// ── Navigation ───────────────────────────────────────────────────
+const SERVICE_URLS = {
+  infer:       '/infer/',
+  train:       '/train/',
+  tensorboard: '/tensorboard/',
+  console:     '/console.html',
+};
+
+const iframes = {};
+
+function navigate(page) {
+  document.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
+
+  const titles = {
+    overview: 'Overview', infer: 'Inference (Gradio)',
+    train: 'Fine-tune (Gradio)', tensorboard: 'TensorBoard',
+    console: 'API Console', apidocs: 'API Documentation', guide: 'Training Guide',
+  };
+  document.getElementById('page-title').textContent = titles[page] || page;
+
+  const wrapper = document.getElementById('iframe-wrapper');
+  const content = document.getElementById('content');
+
+  // Pages rendered inline
+  ['overview','apidocs','guide'].forEach(p => {
+    const el = document.getElementById('page-' + p);
+    if (el) el.style.display = p === page ? '' : 'none';
+  });
+
+  if (SERVICE_URLS[page]) {
+    content.style.display = 'none';
+    wrapper.style.display = 'block';
+    if (!iframes[page]) {
+      const fr = document.getElementById('service-frame');
+      fr.src = SERVICE_URLS[page];
+      iframes[page] = true;
+    }
+  } else {
+    content.style.display = '';
+    wrapper.style.display = 'none';
+  }
+}
+
+document.querySelectorAll('nav a').forEach(a => {
+  a.addEventListener('click', e => { e.preventDefault(); navigate(a.dataset.page); });
+});
+
+// ── Service status ────────────────────────────────────────────────
+const STATUS_CLASS = {
+  running: 'status-running', starting: 'status-starting',
+  not_found: 'status-not_found', error: 'status-error', exited: 'status-exited',
+};
+
+function statusLabel(s) {
+  if (s === 'running') return '● online';
+  if (s === 'starting') return '◌ starting';
+  if (s === 'exited') return '○ stopped';
+  return '✕ ' + s;
+}
+
+function renderCards(data) {
+  const el = document.getElementById('service-cards');
+  el.innerHTML = data.map(s => `
+    <div class="card">
+      <div class="card-head">
+        <span class="icon">${s.icon}</span>
+        <span class="name">${s.label}</span>
+        <span class="status ${STATUS_CLASS[s.status] || 'status-error'}">${statusLabel(s.status)}</span>
+      </div>
+      <div style="font-size:11px;color:var(--mut)">Health: ${s.health}</div>
+      <div class="card-btns">
+        <button class="btn" onclick="restartContainer('${s.name}')">↺ Restart</button>
+        <button class="btn" onclick="showLogs('${s.name}','${s.label}')">📋 Logs</button>
+      </div>
+    </div>`).join('');
+
+  const allOk = data.every(s => s.status === 'running');
+  const anyErr = data.some(s => ['error','exited','not_found'].includes(s.status));
+  const badge = document.getElementById('global-status');
+  badge.textContent = allOk ? 'All systems OK' : anyErr ? 'Issues detected' : 'Starting…';
+  badge.className = 'pill' + (allOk ? '' : anyErr ? ' err' : ' warn');
+}
+
+async function fetchStatus() {
+  try {
+    const r = await fetch('/mgmt/status');
+    const data = await r.json();
+    renderCards(data);
+  } catch (e) {
+    document.getElementById('global-status').textContent = 'mgmt unreachable';
+    document.getElementById('global-status').className = 'pill err';
+  }
+}
+
+async function restartContainer(name) {
+  if (!confirm(`Restart ${name}?`)) return;
+  await fetch(`/mgmt/restart/${name}`, { method: 'POST' });
+  setTimeout(fetchStatus, 2000);
+}
+
+// ── System info ──────────────────────────────────────────────────
+function barClass(pct) { return pct > 90 ? 'err' : pct > 70 ? 'warn' : ''; }
+
+async function fetchSystem() {
+  try {
+    const r = await fetch('/mgmt/system');
+    const d = await r.json();
+
+    if (d.gpu && d.gpu.length) {
+      const g = d.gpu[0];
+      const pct = Math.round(parseInt(g.mem_used_mb) / parseInt(g.mem_total_mb) * 100) || 0;
+      document.getElementById('gpu-val').textContent = g.util_pct + '%';
+      document.getElementById('gpu-sub').textContent = g.name + ' — ' + g.mem_used_mb + '/' + g.mem_total_mb + ' MB';
+      const bar = document.getElementById('gpu-bar');
+      bar.style.width = pct + '%'; bar.className = 'bar-fill ' + barClass(pct);
+    } else {
+      document.getElementById('gpu-val').textContent = 'CPU';
+      document.getElementById('gpu-sub').textContent = 'No NVIDIA GPU';
+    }
+
+    if (d.ram) {
+      document.getElementById('ram-val').textContent = d.ram.pct + '%';
+      document.getElementById('ram-sub').textContent = d.ram.used_gb + ' / ' + d.ram.total_gb + ' GB';
+      const bar = document.getElementById('ram-bar');
+      bar.style.width = d.ram.pct + '%'; bar.className = 'bar-fill ' + barClass(d.ram.pct);
+    }
+
+    if (d.disk) {
+      document.getElementById('disk-val').textContent = d.disk.pct + '%';
+      document.getElementById('disk-sub').textContent = d.disk.used_gb + ' / ' + d.disk.total_gb + ' GB';
+      const bar = document.getElementById('disk-bar');
+      bar.style.width = d.disk.pct + '%'; bar.className = 'bar-fill ' + barClass(d.disk.pct);
+    }
+  } catch (e) {}
+}
+
+// ── Logs modal ───────────────────────────────────────────────────
+async function showLogs(name, label) {
+  document.getElementById('log-title').textContent = label + ' — logs';
+  document.getElementById('log-pre').textContent = 'Loading…';
+  document.getElementById('log-modal').classList.add('open');
+  const r = await fetch(`/mgmt/logs/${name}?lines=200`);
+  const d = await r.json();
+  document.getElementById('log-pre').textContent = d.logs || '(empty)';
+}
+
+function closeLog() { document.getElementById('log-modal').classList.remove('open'); }
+document.getElementById('log-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeLog(); });
+
+// ── Quick test ───────────────────────────────────────────────────
+document.getElementById('qt-btn').addEventListener('click', async () => {
+  const text = document.getElementById('qt-text').value.trim();
+  if (!text) return;
+  const btn = document.getElementById('qt-btn');
+  const status = document.getElementById('qt-status');
+  const player = document.getElementById('qt-player');
+  btn.disabled = true; btn.textContent = '⏳ Generating…';
+  status.textContent = 'Sending request…';
+  player.style.display = 'none';
+  const t0 = Date.now();
+  try {
+    const res = await fetch('/api/voice/tts?' + new URLSearchParams({ text, nfe_step: 16 }));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(new Blob([blob], { type: 'audio/wav' }));
+    player.src = url; player.style.display = ''; player.load();
+    player.oncanplay = () => player.play().catch(() => {});
+    status.textContent = `✓ Done in ${((Date.now()-t0)/1000).toFixed(1)}s`;
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ Generate';
+  }
+});
+
+// ── API docs toggle ──────────────────────────────────────────────
+function toggleEndpoint(el) {
+  el.nextElementSibling.classList.toggle('open');
+}
+
+// ── Init ─────────────────────────────────────────────────────────
+navigate('overview');
+fetchStatus();
+fetchSystem();
+setInterval(fetchStatus, 15000);
+setInterval(fetchSystem, 30000);
+</script>
+</body>
+</html>

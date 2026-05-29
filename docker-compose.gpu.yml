@@ -1,0 +1,42 @@
+version: '3.8'
+
+# GPU override — applied automatically when GPU_ENABLED=true in .env
+# Usage: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# install.sh sets COMPOSE_FILE in .env to handle this automatically
+
+services:
+  f5tts-api:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  f5tts-infer:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  f5tts-train:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  tensorboard:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

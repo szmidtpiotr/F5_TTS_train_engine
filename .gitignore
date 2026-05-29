@@ -1,0 +1,6 @@
+.env
+.htpasswd
+*.pyc
+__pycache__/
+.DS_Store
+*.log

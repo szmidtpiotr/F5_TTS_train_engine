@@ -1,0 +1,94 @@
+version: '3.8'
+
+x-f5tts: &f5tts
+  build:
+    context: ./services
+    dockerfile: f5tts/Dockerfile
+  volumes:
+    - ${DATA_DIR}/models:/data/models:rw
+    - ${DATA_DIR}/datasets:/data/datasets:rw
+    - ${DATA_DIR}/outputs:/data/outputs:rw
+    - ${DATA_DIR}/refs:/data/refs:rw
+    - ${DATA_DIR}/runs:/data/runs:rw
+    - ${DATA_DIR}/checkpoints:/data/checkpoints:rw
+  env_file: .env
+  networks: [f5tts-net]
+  restart: unless-stopped
+
+services:
+
+  dashboard:
+    build: ./services/dashboard
+    container_name: f5tts-dashboard
+    ports:
+      - "${DASHBOARD_PORT:-80}:80"
+    volumes:
+      - ./.htpasswd:/etc/nginx/.htpasswd:ro
+    networks: [f5tts-net]
+    restart: unless-stopped
+    depends_on:
+      - mgmt
+      - f5tts-api
+
+  mgmt:
+    build: ./services/mgmt
+    container_name: f5tts-mgmt
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [f5tts-net]
+    restart: unless-stopped
+
+  f5tts-api:
+    <<: *f5tts
+    container_name: f5tts-api
+    working_dir: /opt/f5tts-api
+    command: uvicorn main:app --host 0.0.0.0 --port 8301
+    ports:
+      - "${API_PORT:-8301}:8301"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8301/voice/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  f5tts-infer:
+    <<: *f5tts
+    container_name: f5tts-infer
+    environment:
+      GRADIO_ROOT_PATH: /infer
+    command: python /opt/f5-tts/src/f5_tts/infer/infer_gradio.py --host 0.0.0.0 --port 7860
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7860/"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+
+  f5tts-train:
+    <<: *f5tts
+    container_name: f5tts-train
+    environment:
+      GRADIO_ROOT_PATH: /train
+    command: python /opt/f5-tts/src/f5_tts/train/finetune_gradio.py --host 0.0.0.0 --port 7861
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7861/"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+
+  tensorboard:
+    <<: *f5tts
+    container_name: f5tts-tensorboard
+    command: tensorboard --logdir /data/runs --host 0.0.0.0 --port 6006 --path_prefix /tensorboard
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:6006/tensorboard/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  f5tts-net:
+    driver: bridge
