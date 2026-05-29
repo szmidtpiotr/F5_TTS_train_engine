@@ -86,13 +86,71 @@ fi
 
 # ── 1. Dependencies ──────────────────────────────────────────────
 echo -e "${BOLD}[1/6] Checking dependencies…${NC}"
-command -v docker &>/dev/null     || err "Docker not found. Install: https://docs.docker.com/get-docker/"
-docker info &>/dev/null 2>&1      || err "Docker daemon not running. Run: sudo systemctl start docker"
-docker compose version &>/dev/null || err "Docker Compose plugin not found"
-command -v git &>/dev/null        || err "Git not found: sudo apt-get install git"
-ok "Docker $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo '?')"
-ok "Docker Compose $(docker compose version --short 2>/dev/null || echo '?')"
-ok "Git $(git --version | awk '{print $3}')"
+
+# Must run as root or with sudo for installs
+if [[ $EUID -ne 0 ]] && ! sudo -n true 2>/dev/null; then
+  warn "Some installations may require sudo — you may be prompted for your password."
+fi
+
+install_docker() {
+  info "Docker not found — installing Docker Engine…"
+  if ! command -v curl &>/dev/null; then
+    sudo apt-get update -qq && sudo apt-get install -y -qq curl
+  fi
+  curl -fsSL https://get.docker.com | sudo sh
+  sudo systemctl enable docker
+  sudo systemctl start docker
+  # Add current user to docker group so we don't need sudo for docker commands
+  sudo usermod -aG docker "$USER"
+  ok "Docker installed"
+  warn "You have been added to the 'docker' group."
+  warn "If docker commands fail, log out and back in, or run: newgrp docker"
+  # Try to activate group in current session
+  exec sg docker "$0" "$@" 2>/dev/null || true
+}
+
+install_compose() {
+  info "Docker Compose plugin not found — installing…"
+  DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
+  mkdir -p "$DOCKER_CONFIG/cli-plugins"
+  COMPOSE_VERSION=$(curl -fsSL https://api.github.com/repos/docker/compose/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+  curl -fsSL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+    -o "$DOCKER_CONFIG/cli-plugins/docker-compose"
+  chmod +x "$DOCKER_CONFIG/cli-plugins/docker-compose"
+  ok "Docker Compose ${COMPOSE_VERSION} installed"
+}
+
+# Docker
+if ! command -v docker &>/dev/null; then
+  install_docker
+else
+  ok "Docker $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo '?')"
+fi
+
+# Docker daemon running?
+if ! docker info &>/dev/null 2>&1; then
+  info "Docker daemon not running — starting…"
+  sudo systemctl start docker
+  sleep 3
+  docker info &>/dev/null 2>&1 || err "Could not start Docker daemon. Run: sudo systemctl start docker"
+  ok "Docker daemon started"
+fi
+
+# Docker Compose
+if ! docker compose version &>/dev/null 2>&1; then
+  install_compose
+else
+  ok "Docker Compose $(docker compose version --short 2>/dev/null || echo '?')"
+fi
+
+# Git
+if ! command -v git &>/dev/null; then
+  info "Git not found — installing…"
+  sudo apt-get update -qq && sudo apt-get install -y -qq git
+  ok "Git $(git --version | awk '{print $3}')"
+else
+  ok "Git $(git --version | awk '{print $3}')"
+fi
 
 # ── 2. Configuration ─────────────────────────────────────────────
 echo -e "\n${BOLD}[2/6] Configuration${NC}"
