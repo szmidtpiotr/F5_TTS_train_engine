@@ -236,7 +236,17 @@ DL_MODEL="${DL_MODEL:-Y}"
 if [[ "$DL_MODEL" =~ ^[Yy] ]]; then
   mkdir -p "$DATA_DIR/models/base"
   info "Downloading from HuggingFace (SWivid/F5-TTS)…"
-  python3 -c "
+
+  # Ensure huggingface_hub is available (Ubuntu 24.04 needs --break-system-packages)
+  if ! python3 -c "import huggingface_hub" &>/dev/null; then
+    info "Installing huggingface_hub…"
+    pip3 install huggingface_hub -q --break-system-packages 2>/dev/null \
+      || pip3 install huggingface_hub -q \
+      || { warn "pip failed — trying pipx…"; pipx install huggingface_hub 2>/dev/null || true; }
+  fi
+
+  # Download model (non-fatal — install continues even if download fails)
+  if python3 -c "
 from huggingface_hub import snapshot_download
 snapshot_download(
     repo_id='SWivid/F5-TTS',
@@ -245,23 +255,14 @@ snapshot_download(
     ignore_patterns=['*.index.json']
 )
 print('OK')
-" 2>&1 | tail -5 || {
-    warn "huggingface_hub not found — installing…"
-    pip3 install huggingface_hub -q
-    python3 -c "
-from huggingface_hub import snapshot_download
-snapshot_download(
-    repo_id='SWivid/F5-TTS',
-    local_dir='$DATA_DIR/models/base',
-    allow_patterns=['F5TTS_v1_Base/*','vocab.txt'],
-    ignore_patterns=['*.index.json']
-)
-print('OK')
-"
-  }
-  ok "Base model downloaded to $DATA_DIR/models/base"
-  MODEL_PATH="/data/models/base/F5TTS_v1_Base/model_1250000.safetensors"
-  VOCAB_FILE="/data/models/base/vocab.txt"
+" 2>&1; then
+    ok "Base model downloaded to $DATA_DIR/models/base"
+    MODEL_PATH="/data/models/base/F5TTS_v1_Base/model_1250000.safetensors"
+    VOCAB_FILE="/data/models/base/vocab.txt"
+  else
+    warn "Model download failed — you can download it manually later."
+    warn "Run inside the repo dir: python3 -c \"from huggingface_hub import snapshot_download; snapshot_download('SWivid/F5-TTS', local_dir='$DATA_DIR/models/base')\""
+  fi
 else
   warn "Skipped — set MODEL_PATH in .env when you have a model"
 fi
