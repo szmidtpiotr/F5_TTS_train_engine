@@ -18,9 +18,10 @@ RUN pip3 install \
     torchaudio==2.3.0 \
     --index-url https://download.pytorch.org/whl/cu121
 
-# Clone F5-TTS and install all deps, constrained to keep our torch versions
+# Clone F5-TTS at a known-working commit (Gradio 6.x compatible)
 RUN git clone https://github.com/SWivid/F5-TTS.git /opt/f5-tts && \
     cd /opt/f5-tts && \
+    git checkout 2ae2c9b && \
     pip3 install ".[train]" -c /tmp/constraints.txt
 
 # API service deps + tensorboard (not always pulled by F5-TTS [train])
