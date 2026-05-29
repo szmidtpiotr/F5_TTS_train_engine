@@ -321,24 +321,56 @@ docker compose build 2>&1 | grep -E '^(Step|#|ERROR|Successfully)' | head -50 ||
 ok "Images built"
 info "Starting all services…"
 docker compose up -d
-sleep 5
-docker compose ps
+
+# Wait for containers to settle
+echo -n "  Waiting for services"
+for i in $(seq 1 12); do sleep 2; echo -n "."; done
+echo ""
+
+# Container status table
+echo ""
+docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || docker compose ps
 
 echo -e "\n${BOLD}${GREEN}"
-cat << DONE
-╔══════════════════════════════════════════════╗
-║          Installation Complete! 🎉           ║
-╚══════════════════════════════════════════════╝
+cat << 'DONE'
+╔══════════════════════════════════════════════════════════════╗
+║                  Installation Complete! 🎉                   ║
+╚══════════════════════════════════════════════════════════════╝
 DONE
 echo -e "${NC}"
-echo -e "  Dashboard:   ${BLUE}http://${HOST_IP}:${DASHBOARD_PORT}${NC}"
-echo -e "  API direct:  ${BLUE}http://${HOST_IP}:${API_PORT}/voice/tts${NC}"
-echo -e "  Username:    ${BOLD}${ADMIN_USER}${NC}"
+
+echo -e "  ${BOLD}┌─ Web Interface ──────────────────────────────────────┐${NC}"
+echo -e "  │  Dashboard    ${BLUE}http://${HOST_IP}:${DASHBOARD_PORT}${NC}"
+echo -e "  │  Inference    ${BLUE}http://${HOST_IP}:${DASHBOARD_PORT}/infer/${NC}"
+echo -e "  │  Fine-tune    ${BLUE}http://${HOST_IP}:${DASHBOARD_PORT}/train/${NC}"
+echo -e "  │  TensorBoard  ${BLUE}http://${HOST_IP}:${DASHBOARD_PORT}/tensorboard/${NC}"
+echo -e "  │  API Console  ${BLUE}http://${HOST_IP}:${DASHBOARD_PORT}/console.html${NC}"
+echo -e "  ${BOLD}└──────────────────────────────────────────────────────┘${NC}"
 echo ""
-echo "  Useful commands:"
-echo "    ./start.sh              — start all services"
-echo "    ./stop.sh               — stop all services"
-echo "    docker compose logs -f  — stream all logs"
-echo "    ./uninstall.sh          — remove everything"
+echo -e "  ${BOLD}┌─ API ────────────────────────────────────────────────┐${NC}"
+echo -e "  │  REST API     ${BLUE}http://${HOST_IP}:${API_PORT}/voice/tts?text=Hello${NC}"
+echo -e "  │  Health       ${BLUE}http://${HOST_IP}:${API_PORT}/voice/healthz${NC}"
+echo -e "  ${BOLD}└──────────────────────────────────────────────────────┘${NC}"
 echo ""
-echo "  Next step: open the dashboard, go to Fine-tune, and train your voice!"
+echo -e "  ${BOLD}┌─ Credentials ────────────────────────────────────────┐${NC}"
+echo -e "  │  Username     ${BOLD}${ADMIN_USER}${NC}"
+echo -e "  │  Password     ${BOLD}(as set during install)${NC}"
+echo -e "  ${BOLD}└──────────────────────────────────────────────────────┘${NC}"
+echo ""
+echo -e "  ${BOLD}┌─ Data ───────────────────────────────────────────────┐${NC}"
+echo -e "  │  Directory    ${DATA_DIR}"
+echo -e "  │  Models       ${DATA_DIR}/models"
+echo -e "  │  Checkpoints  ${DATA_DIR}/checkpoints"
+echo -e "  │  Datasets     ${DATA_DIR}/datasets"
+echo -e "  ${BOLD}└──────────────────────────────────────────────────────┘${NC}"
+echo ""
+echo -e "  ${BOLD}┌─ Commands ───────────────────────────────────────────┐${NC}"
+echo -e "  │  Start        ${BOLD}./start.sh${NC}"
+echo -e "  │  Stop         ${BOLD}./stop.sh${NC}"
+echo -e "  │  Live logs    ${BOLD}docker compose logs -f${NC}"
+echo -e "  │  Uninstall    ${BOLD}./uninstall.sh${NC}"
+echo -e "  ${BOLD}└──────────────────────────────────────────────────────┘${NC}"
+echo ""
+echo -e "  ${YELLOW}Next step:${NC} Open the Dashboard → Fine-tune → record or upload"
+echo -e "  your voice → train → enjoy your personal TTS model! 🎙️"
+echo ""
