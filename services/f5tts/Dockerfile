@@ -18,13 +18,18 @@ RUN pip3 install \
     torchaudio==2.3.0 \
     --index-url https://download.pytorch.org/whl/cu121
 
-# Clone F5-TTS at a known-working commit (Gradio 6.x compatible)
+# Clone F5-TTS at known-working commit and install all deps with version constraints
 RUN git clone https://github.com/SWivid/F5-TTS.git /opt/f5-tts && \
     cd /opt/f5-tts && \
     git checkout 2ae2c9b && \
     pip3 install ".[train]" -c /tmp/constraints.txt
 
-# API service deps + tensorboard (not always pulled by F5-TTS [train])
+# Patch finetune_gradio.py — remove show_api arg dropped in Gradio 6.x
+RUN sed -i \
+    's/show_api=api, //g; s/, show_api=api//g; s/show_api=api//g' \
+    /opt/f5-tts/src/f5_tts/train/finetune_gradio.py || true
+
+# API service deps + tensorboard (not always pulled by F5-TTS [train] extras)
 RUN pip3 install fastapi "uvicorn[standard]" huggingface_hub tensorboard
 
 COPY api/main.py /opt/f5tts-api/main.py
