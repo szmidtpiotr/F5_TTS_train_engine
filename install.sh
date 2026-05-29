@@ -20,6 +20,70 @@ cat << 'BANNER'
 BANNER
 echo -e "${NC}"
 
+# ── Uninstall mode ───────────────────────────────────────────────
+do_uninstall() {
+  local keep_data="${1:-yes}"
+  cd "$DIR"
+
+  echo -e "\n${BOLD}Stopping and removing containers…${NC}"
+  docker compose down --remove-orphans 2>/dev/null || true
+
+  echo "Removing Docker images…"
+  docker images --format '{{.Repository}}:{{.Tag}}' | grep '^f5tts-engine' | xargs -r docker rmi 2>/dev/null || true
+
+  echo "Removing config files…"
+  rm -f "$DIR/.env" "$DIR/.htpasswd"
+
+  if [[ "$keep_data" == "no" ]]; then
+    [[ -f "$DIR/.env.bak" ]] && source "$DIR/.env.bak" 2>/dev/null || true
+    if [[ -n "${DATA_DIR:-}" && -d "$DATA_DIR" ]]; then
+      echo -e "${RED}Deleting data directory: $DATA_DIR${NC}"
+      rm -rf "$DATA_DIR"
+      ok "Data directory removed"
+    fi
+    rm -f "$DIR/.env.bak"
+  fi
+
+  echo ""
+  ok "Uninstallation complete."
+  [[ "$keep_data" == "yes" ]] && echo "  Your data at ${DATA_DIR:-DATA_DIR} was preserved."
+  echo "  To reinstall: ./install.sh"
+  exit 0
+}
+
+# If already installed, show a menu
+if [[ -f "$DIR/.env" ]]; then
+  source "$DIR/.env" 2>/dev/null || true
+  echo -e "${YELLOW}F5-TTS Engine is already installed.${NC}"
+  echo -e "  Data dir: ${BOLD}${DATA_DIR:-unknown}${NC}"
+  echo ""
+  echo "  What would you like to do?"
+  echo "    [1] Reinstall / reconfigure"
+  echo "    [2] Uninstall — remove containers and config (keep models and data)"
+  echo "    [3] Uninstall completely — remove EVERYTHING including models and datasets"
+  echo "    [4] Cancel"
+  echo ""
+  read -p "  Choice [1-4]: " MENU_CHOICE
+  case "${MENU_CHOICE:-4}" in
+    1) echo "" ;;   # fall through to install
+    2) do_uninstall yes ;;
+    3)
+      echo ""
+      echo -e "${RED}${BOLD}WARNING: This will permanently delete all models, datasets, and checkpoints in:${NC}"
+      echo -e "  ${BOLD}${DATA_DIR:-unknown}${NC}"
+      echo ""
+      read -p "  Type DELETE to confirm: " CONFIRM_DEL
+      if [[ "$CONFIRM_DEL" == "DELETE" ]]; then
+        cp "$DIR/.env" "$DIR/.env.bak" 2>/dev/null || true
+        do_uninstall no
+      else
+        echo "Aborted."; exit 0
+      fi
+      ;;
+    *) echo "Cancelled."; exit 0 ;;
+  esac
+fi
+
 # ── 1. Dependencies ──────────────────────────────────────────────
 echo -e "${BOLD}[1/6] Checking dependencies…${NC}"
 command -v docker &>/dev/null     || err "Docker not found. Install: https://docs.docker.com/get-docker/"
